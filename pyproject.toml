@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "webstats"
+version = "0.1.0"
+description = ""
+authors = ["Adrián Arroyo Calle <adrian.arroyocalle@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+requests = "^2.32.3"
+polars = "^1.9.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
