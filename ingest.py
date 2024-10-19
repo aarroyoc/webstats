@@ -79,7 +79,7 @@ def main():
               FROM read_csv('%s', columns = {
                 'remote_addr': 'VARCHAR',
                 'remote_user': 'VARCHAR',
-                'time': 'TIMETZ',
+                'time': 'TIMESTAMPTZ',
                 'request': 'VARCHAR',
                 'status': 'SMALLINT',
                 'body_bytes_sent': 'INTEGER',
