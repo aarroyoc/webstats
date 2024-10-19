@@ -1,0 +1,9 @@
+[Unit]
+Description=Ingest blog.adrianistan.eu logs from nginx to Azure
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/poetry run python ingest.py --log-file /var/log/nginx/access-blog.adrianistan.eu.log --blob-sas-url "https://adrianistanlogs.blob.core.windows.net/blog-adrianistan-eu?SAS_TOKEN" 
+WorkingDirectory=/home/user/webstats

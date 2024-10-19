@@ -1,0 +1,8 @@
+[Unit]
+Description=Timer activation of log ingestion for blog.adrianistan.eu
+
+[Timer]
+OnCalendar=4:00
+
+[Install]
+WantedBy=timers.target
