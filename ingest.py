@@ -42,7 +42,7 @@ def main():
               FROM read_csv('%s', columns = {
                 'remote_addr': 'VARCHAR',
                 'remote_user': 'VARCHAR',
-                'time': 'TIMETZ',
+                'time': 'TIMESTAMPTZ',
                 'request': 'VARCHAR',
                 'status': 'SMALLINT',
                 'body_bytes_sent': 'INTEGER',
@@ -101,31 +101,6 @@ def main():
 def azure_url(filename, blob_sas_url):
     blob_split_url = blob_sas_url.split("?")
     return f"{blob_split_url[0]}/{filename}?{blob_split_url[1]}"
-
-def upload_file_cloud(blob_url, log_file, date):
-    url = azure_url(blob_url, date)
-
-    pl.scan_csv(
-        log_file,
-        try_parse_dates=True,
-        has_header=False,
-        new_columns=["remote_addr", "remote_user", "time", "request",
-                     "status", "body_bytes_sent", "http_referer",
-                     "http_user_agent", "http_x_forwarded_for"],
-    ).filter(
-        pl.col("time").dt.year() == date.year,
-        pl.col("time").dt.month() == date.month,
-        pl.col("time").dt.day() == date.day,
-    ).with_columns(
-        method=pl.col("request").str.extract("(.+) (.+) (.+)", 1),
-        path=pl.col("request").str.extract("(.+) (.+) (.+)", 2),
-        protocol=pl.col("request").str.extract("(.+) (.+) (.+)", 3),
-    ).collect().write_parquet("logs.parquet", compression="zstd")
-
-    requests.put(url, headers={
-        "Content-Type": "application/vnd.apache.parquet",
-        "x-ms-blob-type": "BlockBlob"
-    }, data=open("logs.parquet", "rb"))
 
 if __name__ == "__main__":
     main()
