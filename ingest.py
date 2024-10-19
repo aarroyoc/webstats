@@ -1,7 +1,17 @@
 import argparse
 import requests
-import polars as pl
+import duckdb
+from urllib.request import urlretrieve
 from datetime import datetime, timedelta
+
+# We take file logs-all.parquet
+# If exists:
+# - We download it and get the last date of the logs
+# - We open the nginx log file and we append the logs after that date
+# - We upload a new logs.parquet file
+# If it doesn't
+# - We open the nginx log file and append everything
+# - We upload a new logs.parquet file
 
 def main():
     parser = argparse.ArgumentParser()
@@ -9,25 +19,88 @@ def main():
     parser.add_argument("--blob-sas-url", help="Azure Blob URL to upload Parquet file with a SAS token attached", required=True)
     args = parser.parse_args()
 
-    today = datetime.now()
+    url = azure_url("logs.parquet", args.blob_sas_url)
+    response = requests.head(url)
+    if response.status_code != 404:
+        urlretrieve(url, "old-logs.parquet")
+        duckdb.sql(
+            """
+            COPY
+            (
+              SELECT
+                remote_addr,
+                remote_user,
+                time,
+                status,
+                body_bytes_sent,
+                http_referer,
+                http_user_agent,
+                http_x_forwarded_for,
+                regexp_extract(request, '(.+) (.+) (.+)', 1) AS method,
+                regexp_extract(request, '(.+) (.+) (.+)', 2) AS path,
+                regexp_extract(request, '(.+) (.+) (.+)', 3) AS protocol,
+              FROM read_csv('%s', columns = {
+                'remote_addr': 'VARCHAR',
+                'remote_user': 'VARCHAR',
+                'time': 'TIMETZ',
+                'request': 'VARCHAR',
+                'status': 'SMALLINT',
+                'body_bytes_sent': 'INTEGER',
+                'http_referer': 'VARCHAR',
+                'http_user_agent': 'VARCHAR',
+                'http_x_forwarded_for': 'VARCHAR',
+              })
+              WHERE
+                time > ( SELECT MAX(time) FROM read_parquet('old-logs.parquet'))
+              UNION
+              SELECT * FROM read_parquet('old-logs.parquet')
+            )
+            TO 'logs.parquet'
+            (FORMAT 'parquet', COMPRESSION 'zstd')
+            """ % args.log_file )
+        requests.delete(url)
+    else:
+        duckdb.sql(
+            """
+            COPY
+            (
+              SELECT
+                remote_addr,
+                remote_user,
+                time,
+                status,
+                body_bytes_sent,
+                http_referer,
+                http_user_agent,
+                http_x_forwarded_for,
+                regexp_extract(request, '(.+) (.+) (.+)', 1) AS method,
+                regexp_extract(request, '(.+) (.+) (.+)', 2) AS path,
+                regexp_extract(request, '(.+) (.+) (.+)', 3) AS protocol,
+              FROM read_csv('%s', columns = {
+                'remote_addr': 'VARCHAR',
+                'remote_user': 'VARCHAR',
+                'time': 'TIMETZ',
+                'request': 'VARCHAR',
+                'status': 'SMALLINT',
+                'body_bytes_sent': 'INTEGER',
+                'http_referer': 'VARCHAR',
+                'http_user_agent': 'VARCHAR',
+                'http_x_forwarded_for': 'VARCHAR',
+              })
+            )
+            TO 'logs.parquet'
+            (FORMAT 'parquet', COMPRESSION 'zstd')
+            """ % args.log_file )
 
-    # We check for the last 7 days, if the file exists on Azure
-    for i in range(7):
-        date = today - timedelta(days=i+1)
-        if not exists_log_file_in_cloud(args.blob_sas_url, date):
-            upload_file_cloud(args.blob_sas_url, args.log_file, date)
+    requests.put(url, headers={
+        "Content-Type": "application/vnd.apache.parquet",
+        "x-ms-blob-type": "BlockBlob"
+    }, data=open("logs.parquet", "rb"))
+        
 
-def log_file(date):
-    return date.strftime("logs-%Y-%m-%d.parquet")
-
-def azure_url(blob_sas_url, date):
-    date_str = log_file(date)
+def azure_url(filename, blob_sas_url):
     blob_split_url = blob_sas_url.split("?")
-    return f"{blob_split_url[0]}/{date_str}?{blob_split_url[1]}"
-
-def exists_log_file_in_cloud(blob_url, date):
-    response = requests.head(azure_url(blob_url, date))
-    return response.status_code != 404
+    return f"{blob_split_url[0]}/{filename}?{blob_split_url[1]}"
 
 def upload_file_cloud(blob_url, log_file, date):
     url = azure_url(blob_url, date)
