@@ -32,42 +32,47 @@ df = download_data(urls[website])
 df = df.filter(pl.col("time").dt.replace_time_zone(None).is_between(dates[0], dates[1]))
 st.write(df)
 
+st.header("Pages served")
+tdf = df.with_columns(day=pl.col("time").dt.date())
+tdf = tdf.group_by(pl.col("day")).agg(pl.len().alias("count")).sort("day")
+st.bar_chart(tdf, x="day", y="count")
+
 st.header("Popular pages")
-st.write(df.group_by(pl.col("path")).agg(pl.len().alias("count")).sort("count", descending=True))
-# st.bar_chart(df.group_by(pl.col("path")).agg(pl.len().alias("count")).sort("count", descending=True), x="path", y="count")
+st.dataframe(df.group_by(pl.col("path")).agg(pl.len().alias("count")).sort("count", descending=True), use_container_width=True)
 
 st.header("Data sent in MB")
-bdf = df.group_by(pl.col("path")) \
-    .agg((pl.sum("body_bytes_sent") / 1000000).alias("megabytes")) \
+bdf = df.with_columns(megabytes_sent=pl.col("body_bytes_sent") / 1000000) \
+    .group_by(pl.col("path")) \
+    .agg((pl.sum("megabytes_sent")).alias("megabytes")) \
     .sort("megabytes", descending=True)
 
-st.write(bdf)
+st.dataframe(bdf, use_container_width=True)
 st.write(bdf.select(pl.col("megabytes").sum()))
 
 st.header("User Agents")
-st.write(
+st.dataframe(
     df.group_by(pl.col("http_user_agent"))
     .agg(pl.len().alias("count"))
-    .sort("count", descending=True))
+    .sort("count", descending=True), use_container_width=True)
 
 st.header("Referrals")
 st.subheader("External")
-st.write(
+st.dataframe(
     df.filter(pl.col("http_referer").str.contains(f"^https?://{host}") == False)
     .group_by(pl.col("http_referer"))
     .agg(pl.len().alias("count"))
-    .sort("count", descending=True))
+    .sort("count", descending=True), use_container_width=True)
 st.subheader("Internal")
-st.write(
+st.dataframe(
     df.filter(pl.col("http_referer").str.contains(f"^https?://{host}") == True)
     .group_by(pl.col("http_referer"))
     .agg(pl.len().alias("count"))
-    .sort("count", descending=True))
+    .sort("count", descending=True), use_container_width=True)
 
 st.header("Broken pages")
-st.write(
+st.dataframe(
     df.filter(pl.col("status") == 404)
     .group_by(pl.col("path"))
     .agg(pl.len().alias("count"))
-    .sort("count", descending=True))
+    .sort("count", descending=True), use_container_width=True)
 
