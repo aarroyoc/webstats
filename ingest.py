@@ -1,3 +1,11 @@
+# /// script
+# requires-python = ">=3.13"
+# dependencies = [
+#     "duckdb",
+#     "requests",
+# ]
+# ///
+
 import argparse
 import requests
 import duckdb
@@ -104,3 +112,4 @@ def azure_url(filename, blob_sas_url):
 
 if __name__ == "__main__":
     main()
+
